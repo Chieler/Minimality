@@ -23,10 +23,10 @@ class Memory_Manager:
 
     TEXT TO ANALYZE:
     """
-
+    client = None
     def __init__(self):
         # Establish database connections inside instance initialization scope
-        self.conn = sqlite3.connect(self.DB_URL, timeout=30.0)
+        self.conn = sqlite3.connect(self.DB_URL, timeout=30.0, check_same_thread=False)
         self.conn.enable_load_extension(True)
         sqlite_vec.load(self.conn)
         self.cursor = self.conn.cursor()

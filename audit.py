@@ -49,5 +49,3 @@ def debug_dump_graph(memory_manager):
         
     print("\n=============================================\n")
 
-# Run the diagnostic tool right after data injection
-debug_dump_graph(mm)
