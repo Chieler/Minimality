@@ -2,6 +2,7 @@ from pydantic import BaseModel
 from spacy.matcher import PhraseMatcher
 import instructor
 import spacy
+import json
 class Entity(BaseModel):
     id: str
     name: str
@@ -48,6 +49,17 @@ class Entity_Extractor():
 
         relationship = self.client.create(response_model=ExtractionResult, messages=[{"role" : "user", "content": Prompt + "\n\n" + text}])
         return relationship
+    def get_entities(self, input:str):
+        ENTITY_SYS_MSG="""
+                        Extract only strict computer science, programming languages, tools, frameworks, and technical software architecture terms alongside named entities from the User Text.
+                        Return the result ONLY as a raw, valid array of lowercase strings. Do not write any introductory text, markdown formatting, or explanations. Only source, target, relationship.
+                        Example: ["python", "ollama"]
+                        TEXT TO ANALYZE:
+                        """
+
+        response = self.client.chat(model="llama3.2:1b",
+            messages = [{"role":"user", "content": ENTITY_SYS_MSG+input}])
+        return json.dumps(response['message']['content']) 
     
 
         
