@@ -16,6 +16,9 @@ briefing pack, the tool forge, and the memory schema.
 | Concern | Was (full design) | Now | Why |
 |---|---|---|---|
 | Multi-provider client | hand-rolled OpenAI-compatible wrapper | **LiteLLM** | one `completion()` for 100+ providers, incl. `ollama/...` for local Qwen — cloud and local through the same interface |
+| Orchestrator loop | hand-rolled dispatch loop | **LangGraph** (`StateGraph` + `SqliteSaver` checkpointer) | the stage pipeline is literally a state graph; the SQLite checkpointer means a crashed/interrupted task resumes at the exact node it died on — same file as everything else, and it *strengthens* the resumability thesis rather than competing with the ledger |
+| LLM observability | custom trace logging (deferred) | **Langfuse** | LiteLLM ships a built-in Langfuse callback — one config line gives full tracing of every worker/orchestrator call (free cloud tier or self-hosted); `llm_calls` stays as the local queryable copy |
+| Tool interop (stretch) | — | **MCP** (official Python SDK) | expose *promoted forge tools* as a Model Context Protocol server — agent-forged tools usable from Claude/other MCP clients; small surface, very original |
 | Provider registry + limits | `providers` table | **LiteLLM Router** `config.yaml` | `model_list` with per-deployment `rpm`/`tpm`, keys via `os.environ/...` |
 | Failover + quota rotation | meter views + custom router | **LiteLLM Router** fallbacks + cooldowns | 429 → automatic fallback chain, exhausted deployment cools down — this was ~a week of custom work, now config |
 | Usage telemetry | custom per-call logging | **LiteLLM callbacks** → `llm_calls` | `success_callback`/`failure_callback` write one row per request |
@@ -27,6 +30,19 @@ briefing pack, the tool forge, and the memory schema.
 | Config | constants in code | **pydantic-settings** (`.env`) | kills the hardcoded `DB_URL`, holds API keys |
 | Packaging / DX | none | **uv** + **ruff** + **pytest** | standard 2026 Python toolchain |
 | UI | Streamlit | **Streamlit** (keep) | already there |
+
+**Worker model lineup** (pure config, zero build cost — name them in the
+README): DeepSeek R1/V3 (via OpenRouter `:free`), **Mistral** (La Plateforme),
+**Nous Hermes** (OpenRouter free variants), Llama, Qwen (local via Ollama,
+orchestrator), and **Phi-4** as a second local small model where useful.
+Heterogeneous open-model fleet is the point of the architecture — listing it
+costs nothing and reads exactly like the job postings do.
+
+One deliberate near-miss: **PydanticAI** overlaps almost entirely with the
+instructor + pydantic + LangGraph combination already in the stack. Running
+two agent frameworks reads as keyword stuffing to a human reviewer even where
+an ATS likes it — pydantic itself is already all over the codebase and is the
+honest claim. Revisit only if instructor chafes.
 
 Two deliberate non-libraries:
 
@@ -90,9 +106,11 @@ week overruns, cut from the bottom of that week, not the next milestone.
   slim `memory.py` on sentence-transformers; **close the write loop**
   (messages actually inserted); delete dead code + the regex extractor.
 - **D3–4**: LiteLLM Router `config.yaml`: 4–6 free deployments (e.g. Groq,
-  Gemini free tier, Mistral free tier, OpenRouter `:free` models) + local
-  `ollama/qwen` as its own deployment; fallback chains, cooldowns; usage
-  callback → `llm_calls`. Point instructor at LiteLLM for extraction.
+  Gemini free tier, Mistral free tier, OpenRouter `:free` DeepSeek/Hermes) +
+  local `ollama/qwen` as its own deployment; fallback chains, cooldowns;
+  usage callback → `llm_calls` **and enable the built-in Langfuse callback**
+  (account signup is minutes; do it D1 with the provider keys).
+  Point instructor at LiteLLM for extraction.
 - **D5–7**: wire the chat loop end-to-end in Streamlit: ingest → retrieve
   (vec + one-hop edges) → respond via Router → async extract entities/edges +
   classify sensitivity. Smoke tests.
@@ -100,8 +118,11 @@ week overruns, cut from the bottom of that week, not the next milestone.
   unplug a provider mid-chat, answers keep coming.
 
 ### Week 2 — "the orchestrator" (ledger + briefing pack + sandbox)
-- **D8–9**: ledger CRUD; Qwen (through LiteLLM, same interface as workers)
-  maintains tasks/plan_steps/notes each turn.
+- **D8–9**: ledger CRUD; orchestrator skeleton as a **LangGraph
+  `StateGraph`** — nodes = the §3 stages, state = current task/step ids +
+  scratch, checkpointed with `SqliteSaver` into the same DB file. Qwen
+  (through LiteLLM, same interface as workers) maintains
+  tasks/plan_steps/notes each turn.
 - **D10–11**: briefing-pack renderer: ledger + top-k `shareable` memory +
   top-k promoted tools → system prompt. Unit-test the sensitivity filter
   (this is the one test that must never regress).
@@ -125,10 +146,39 @@ week overruns, cut from the bottom of that week, not the next milestone.
 - Overrun cut line: dashboard tabs after "ledger + provider stats".
 
 ### Explicitly deferred (post-MVP, in order of payoff)
-1. Bandit routing on `runs` outcomes (data is already being collected)
-2. Skill distillation (`kind='skill'` reserved)
-3. Container sandbox
-4. Tool quarantine automation; native function-calling via LiteLLM where reliable
+1. **MCP server over promoted tools** (official Python SDK) — first in line
+   because it's small and the "agent-forged tools served over MCP" story is
+   the most original résumé line in the project; pull it into D20–21 if the
+   buffer survives
+2. Bandit routing on `runs` outcomes (data is already being collected)
+3. Skill distillation (`kind='skill'` reserved)
+4. Container sandbox
+5. Tool quarantine automation; native function-calling via LiteLLM where reliable
+
+## 6. Keyword coverage (for READMEs, postings, and interviews)
+
+Every term below is *earned* by the architecture — claimable without
+hand-waving. Use this exact language in the README:
+
+| Posting keyword | Where it's true in this project |
+|---|---|
+| **Agentic AI / autonomous agents** | orchestrator loop: plan → dispatch → execute → verify → synthesize |
+| **LangGraph / LangChain ecosystem** | orchestrator `StateGraph` with SQLite checkpointing |
+| **LLM observability / tracing / Langfuse** | full-trace instrumentation of every model call via LiteLLM callback |
+| **Multi-provider routing / LiteLLM** | quota-aware failover across DeepSeek, Mistral, Hermes, Llama, Qwen, Phi |
+| **RAG** | vector retrieval (sqlite-vec) over episodic memory |
+| **GraphRAG / knowledge graphs** | entity/relationship graph (`nodes`/`edges`) merged into retrieval context |
+| **Structured outputs / pydantic** | instructor-validated extraction and ledger writes |
+| **Tool use / function calling** | provider-agnostic tool-call protocol + self-built persistent tools |
+| **MCP (Model Context Protocol)** | (post-MVP) forge tools exposed as an MCP server |
+| **Evals / LLM evaluation** | execution-based verification harness; per-provider, per-task-type success rates from `runs` |
+| **Sandboxed code execution** | resource-limited subprocess namespace with artifact tracking |
+| **Local LLM / Ollama / edge inference** | Qwen orchestrator + Phi running locally, hybrid local/cloud split |
+| **Memory / stateful agents** | task ledger + episodic/semantic memory; mid-task provider handoff with zero context loss |
+
+Framing tip for interviews: the demo is Milestone 2 (mid-task provider
+handoff), the differentiators are the tool forge and the briefing-pack
+resumability — lead with those, let the keyword stack be table stakes.
 
 ## 5. Risks to the 3 weeks specifically
 
