@@ -1,5 +1,9 @@
 # Minimality — Database Architecture
 
+> **v1 note:** the 3-week build uses a simplified subset of this design —
+> see [`MVP.md`](MVP.md). `schema/schema.sql` now contains the v1 schema;
+> this doc describes the full target it grows back into.
+
 Executable DDL lives in [`schema/schema.sql`](../schema/schema.sql). This doc
 explains the design. Companion to [`DIRECTION.md`](DIRECTION.md) — section
 references (§2.x) point there.

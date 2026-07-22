@@ -1,5 +1,9 @@
 # Minimality — Workflow Graph & Data Lineage
 
+> **v1 note:** the 3-week build implements a simplified version of these
+> flows — see [`MVP.md`](MVP.md) §3 for the v1 workflow and what each stage
+> shrank to. This doc remains the full-design reference.
+
 Companion to [`DB_SCHEMA.md`](DB_SCHEMA.md) (what the tables are) and
 [`DIRECTION.md`](DIRECTION.md) (why). This doc shows **when each table is
 touched during a turn, and what data feeds which column**.
